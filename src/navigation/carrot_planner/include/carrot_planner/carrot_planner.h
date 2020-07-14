@@ -85,6 +85,10 @@ namespace carrot_planner{
       bool makePlan(const geometry_msgs::PoseStamped& start, 
           const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan);
 
+      void publishPlan(const std::vector<geometry_msgs::PoseStamped>& path);
+
+      ros::Publisher plan_pub_;
+
     private:
       costmap_2d::Costmap2DROS* costmap_ros_;
       double step_size_, min_dist_from_robot_;

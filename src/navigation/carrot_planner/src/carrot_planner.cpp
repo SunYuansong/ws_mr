@@ -36,6 +36,7 @@
 *********************************************************************/
 #include <carrot_planner/carrot_planner.h>
 #include <pluginlib/class_list_macros.h>
+#include <nav_msgs/Path.h>
 
 //register this planner as a BaseGlobalPlanner plugin
 PLUGINLIB_EXPORT_CLASS(carrot_planner::CarrotPlanner, nav_core::BaseGlobalPlanner)
@@ -59,6 +60,8 @@ namespace carrot_planner {
       private_nh.param("step_size", step_size_, costmap_->getResolution());
       private_nh.param("min_dist_from_robot", min_dist_from_robot_, 0.10);
       world_model_ = new base_local_planner::CostmapModel(*costmap_); 
+
+      plan_pub_ = private_nh.advertise<nav_msgs::Path>("plan", 1);
 
       initialized_ = true;
     }
@@ -166,7 +169,37 @@ namespace carrot_planner {
     new_goal.pose.orientation.w = goal_quat.w();
 
     plan.push_back(new_goal);
+    publishPlan(plan);
     return (done);
   }
+
+  void CarrotPlanner::publishPlan(const std::vector<geometry_msgs::PoseStamped>& path)
+  {
+    if (!initialized_)
+    {
+        ROS_ERROR(
+        "This planner has not been initialized yet, but it is being used, please call initialize() before use");
+        return;
+    }
+
+    //create a message for the plan
+    nav_msgs::Path gui_path;
+    gui_path.poses.resize(path.size());
+
+    if (!path.empty())
+    {
+        gui_path.header.frame_id = path[0].header.frame_id;
+        gui_path.header.stamp = path[0].header.stamp;
+    }
+
+    // Extract the plan in world co-ordinates, we assume the path is all in the same frame
+    for (unsigned int i = 0; i < path.size(); i++)
+    {
+        gui_path.poses[i] = path[i];
+    }
+
+    plan_pub_.publish(gui_path);
+  }
+
 
 };
