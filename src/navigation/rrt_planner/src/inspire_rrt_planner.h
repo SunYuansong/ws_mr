@@ -192,14 +192,15 @@ public:
         vector<RRT::rrtNode> tempNodes;  //临时结点数组
         RRT::rrtNode loopNode;
 
-        for(int i=0; i<randNodeNum; i++)
+        //randNodeNum=1 为一次生成随机点个数
+        for(int i=0; i<randNodeNum; i++)//找到距随机点最近的树结点
         {
             int tempNearestNodeID = myRRT.getNearestNodeID(randNodes[i].posX,randNodes[i].posY);
             RRT::rrtNode tempNearestNode=myRRT.getNode(tempNearestNodeID);
             nearestNodes.push_back(tempNearestNode);
         }
 
-        for(int i=0; i<randNodeNum; i++)
+        for(int i=0; i<randNodeNum; i++)//向随机点扩展树结点
         {
             double theta = atan2(randNodes[i].posY - nearestNodes[i].posY, randNodes[i].posX - nearestNodes[i].posX);//两个点形成的斜率
             loopNode.posX = (int)(nearestNodes[i].posX + (rrtStepSize * cos(theta)));
@@ -213,7 +214,7 @@ public:
 
         vector<float> evaluateCost;  //启发函数估价
 
-        for(int i=0; i<tempNodes.size(); i++)
+        for(int i=0; i<tempNodes.size(); i++)//计算从起点到新生点的路径长度作为cost
         {
             int tempIndex=i;
             RRT::rrtNode tempNode=tempNodes[i];
@@ -232,7 +233,7 @@ public:
 
         int tempIndex=-1;
         float tempCost=infinity;
-        for(int i=0; i<evaluateCost.size(); i++)
+        for(int i=0; i<evaluateCost.size(); i++)//找到新生成点中cost最小的点，否则说明生成点过程失败
         {
             if(evaluateCost[i]<tempCost)
             {
@@ -241,6 +242,8 @@ public:
             }
         }
 
+        //RRT*优化过程
+        //1.找到一定范围内cost最小的父结点
         if(tempIndex!=-1)
         {
             RRT::rrtNode successNode=tempNodes[tempIndex];

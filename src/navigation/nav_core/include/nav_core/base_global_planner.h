@@ -55,7 +55,8 @@ namespace nav_core {
        * @return True if a valid plan was found, false otherwise
        */
       virtual bool makePlan(const geometry_msgs::PoseStamped& start, 
-          const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan) = 0;
+                            const geometry_msgs::PoseStamped& goal, 
+                            std::vector<geometry_msgs::PoseStamped>& plan) = 0;//纯虚函数，抽象类
 
       /**
        * @brief Given a goal pose in the world, compute a plan
@@ -66,7 +67,8 @@ namespace nav_core {
        * @return True if a valid plan was found, false otherwise
        */
       virtual bool makePlan(const geometry_msgs::PoseStamped& start, 
-                            const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan,
+                            const geometry_msgs::PoseStamped& goal, 
+                            std::vector<geometry_msgs::PoseStamped>& plan,
                             double& cost)
       {
         cost = 0;

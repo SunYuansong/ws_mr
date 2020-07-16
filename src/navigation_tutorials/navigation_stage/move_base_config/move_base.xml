@@ -23,7 +23,7 @@
     <rosparam file="$(find navigation_stage)/move_base_config/dwa_local_planner_params.yaml" command="load" />
     -->
     
-    <!-- <param name="base_global_planner"  value="rrt_plan/rrt_planner"/> -->
+    <param name="base_global_planner"  value="rrt_plan/rrt_planner"/>
 
   </node>
 </launch>
