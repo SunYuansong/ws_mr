@@ -175,4 +175,5 @@ include_directories(
 link_directories(${catkin_LIBRARY_DIRS})
 
 add_library(rrt_lib src/rrt_planner.cpp)
+add_library(rrtstar_lib src/rrtstar_planner.cpp)
 #target_link_libraries(rrt_lib ${catkin_LIBRARIES} base_local_planner)

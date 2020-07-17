@@ -1,3 +1,8 @@
+/*********************************************************************
+* Descritption: RRT_star planner class, define the process of RRT_star
+*               algorithm and the access function. Based on RRT node.
+*
+*********************************************************************/
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -11,28 +16,24 @@
 
 //include ros libraries
 #include <ros/ros.h>
-
 #include <actionlib/client/simple_action_client.h>
 #include <move_base_msgs/MoveBaseAction.h>
-
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <move_base_msgs/MoveBaseGoal.h>
 #include <move_base_msgs/MoveBaseActionGoal.h>
-
 #include "sensor_msgs/LaserScan.h"
 #include "sensor_msgs/PointCloud2.h"
-
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/OccupancyGrid.h>
 #include <nav_msgs/Path.h>
 #include <nav_msgs/GetPlan.h>
-
 #include <tf/tf.h>
 #include <tf/transform_datatypes.h>
 #include <tf/transform_listener.h>
 
+//多线程
 #include <boost/foreach.hpp>
 //#define forEach BOOST_FOREACH
 
@@ -50,13 +51,14 @@
 
 #include <set>
 
+//RRT node class
 #include "rrt.h"
 
 using namespace std;
 using std::string;
 
-#ifndef RRT_PLANNER
-#define RRT_PLANNER
+#ifndef RRTSTAR_PLANNER
+#define RRTSTAR_PLANNER
 
 /**
  * @struct cells
@@ -65,7 +67,7 @@ using std::string;
 
 #define RANDOM_MAX 2147483647
 
-namespace rrt_plan
+namespace rrtstar_plan
 {
 struct Cell
 {
@@ -73,13 +75,13 @@ struct Cell
     int posY;
 };
 
-class rrt_planner : public nav_core::BaseGlobalPlanner
+class rrtstar_planner : public nav_core::BaseGlobalPlanner
 {
 public:
 
-    rrt_planner (ros::NodeHandle &); //this constructor is may be not needed
-    rrt_planner ();
-    rrt_planner(std::string name, costmap_2d::Costmap2DROS* costmap_ros);
+    rrtstar_planner (ros::NodeHandle &); //this constructor is may be not needed
+    rrtstar_planner ();
+    rrtstar_planner (std::string name, costmap_2d::Costmap2DROS* costmap_ros);
 
     ros::NodeHandle ROSNodeHandle;
 
@@ -241,22 +243,34 @@ public:
                 tempCost=evaluateCost[i];
             }
         }
-
-        //RRT*优化过程
-        //1.找到一定范围内cost最小的父结点
+        
+        //原始RRT
+        // if(tempIndex!=-1)
+        // {
+        //     RRT::rrtNode successNode=tempNodes[tempIndex];
+        //     RRT::rrtNode nearestNode=nearestNodes[tempIndex];
+        //     successNode.nodeID = myRRT.getTreeSize();
+        //     successNode.depth=nearestNodes[tempIndex].depth+1;
+        //     successNode.parentID=nearestNodes[tempIndex].nodeID;
+        //     myRRT.addNewNode(successNode);
+        //     return true;
+        // }
+        
+        //RRT*
         if(tempIndex!=-1)
         {
             RRT::rrtNode successNode=tempNodes[tempIndex];
             RRT::rrtNode nearestNode=nearestNodes[tempIndex];
             float thrshold=15.00,maxvalue=999,maxvalue1;     
-            int index=-1;      
+            //1.找到一定范围内cost最小的父结点
+            int index=-1;
             for(int i=0;i<myRRT.getTreeSize();i++)
-            {
+            { 
                 float dist=sqrt(pow(successNode.posX-myRRT.getNode(i).posX,2)+pow(successNode.posY-myRRT.getNode(i).posY,2));
                 if((dist<thrshold)&&(myRRT.getNode(i).depth*rrtStepSize+dist<maxvalue))
                 {
                     maxvalue=myRRT.getNode(i).depth*rrtStepSize+dist;
-                    index=i;
+                    index=i;//thrshold范围内cost最小父结点的序号
                 }
             }          
             if((index!=-1)&&(pointcheck(myRRT.getNode(index),successNode)))
@@ -270,35 +284,36 @@ public:
                 successNode.nodeID = myRRT.getTreeSize();
                 successNode.depth=nearestNodes[tempIndex].depth+1; 
             }
-            vector<int>index1;
+            //2.更新范围内successNode子结点
+            vector<int>index2;
             for(int j=0;j<myRRT.getTreeSize();j++)
-            {
+            {   //计算范围内结点cost
                 float dist1=sqrt(pow(successNode.posX-myRRT.getNode(j).posX,2)+pow(successNode.posY-myRRT.getNode(j).posY,2));
                 if((j!=index)&&(dist1<thrshold)&&(pointcheck(successNode,myRRT.getNode(j) )))
                 {              
-                    index1.push_back(j);
+                    index2.push_back(j);
                 }
             }
-            if((index1.size()!=0)&&(index!=-1)&&(pointcheck(myRRT.getNode(index),successNode)))
+            //将可优化结点的父结点更新为successNode
+            if((index2.size()!=0)&&(index!=-1)&&(pointcheck(myRRT.getNode(index),successNode)))
             {
-            	    for (int k=0;k<index1.size();k++)
-            	    {
-                    	RRT::rrtNode tt=myRRT.getNode(index1[k]);
-                    	successNode.nodeID = myRRT.getTreeSize();
-                    	successNode.depth=myRRT.getNode(index).depth+sqrt(pow(successNode.posX-myRRT.getNode(index).posX,2)+pow(successNode.posY-myRRT.getNode(index).posY,2))/rrtStepSize;   
-                    	if((successNode.depth+sqrt(pow(successNode.posX-myRRT.getNode(index1[k]).posX,2)+pow(successNode.posY-myRRT.getNode(index1[k]).posY,2))/rrtStepSize<myRRT.getNode(index1[k]).depth)&&(pointcheck(successNode,myRRT.getNode(index1[k]))))
-                    	{          
-                    		tt.parentID=successNode.nodeID; 
-                    		tt.depth=successNode.depth+sqrt(pow(successNode.posX-myRRT.getNode(index1[k]).posX,2)+pow(successNode.posY-myRRT.getNode(index1[k]).posY,2))/rrtStepSize;
-                    		tt.nodeID=myRRT.getTreeSize()+1;
-                   		    myRRT.getNode(index1[k])=tt;
-                        }
+                for (int k=0;k<index2.size();k++)
+                {
+                    RRT::rrtNode tt=myRRT.getNode(index2[k]);
+                    if((successNode.depth+sqrt(pow(successNode.posX-myRRT.getNode(index2[k]).posX,2)+pow(successNode.posY-myRRT.getNode(index2[k]).posY,2))/rrtStepSize<myRRT.getNode(index2[k]).depth)&&(pointcheck(successNode,myRRT.getNode(index2[k]))))
+                    {          
+                        tt.parentID=successNode.nodeID; 
+                        tt.depth=successNode.depth+sqrt(pow(successNode.posX-myRRT.getNode(index2[k]).posX,2)+pow(successNode.posY-myRRT.getNode(index2[k]).posY,2))/rrtStepSize;
+                        //tt.nodeID=myRRT.getTreeSize()+1;
+                        myRRT.getNode(index2[k])=tt;
                     }
+                }
             }
     
             myRRT.addNewNode(successNode);
             return true;            
         }
+        
         return false;
     }
 
@@ -324,7 +339,6 @@ public:
     int height;
 
     ros::Publisher plan_pub_;
-    ros::Publisher plan_pub_2;
 };
 
 };

@@ -69,6 +69,7 @@
     <!-- You can specify that this package is a metapackage here: -->
     <!-- <metapackage/> -->
     <nav_core plugin="${prefix}/rrt_planner_plugin.xml"/>
+    <nav_core plugin="${prefix}/rrtstar_planner_plugin.xml"/>
   </export>
 
 </package>

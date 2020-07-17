@@ -19,7 +19,6 @@
     <rosparam file="$(find turtlebot_navigation)/param/global_costmap_params.yaml" command="load" />
     <rosparam file="$(find turtlebot_navigation)/param/dwa_local_planner_params.yaml" command="load" />
     <rosparam file="$(find turtlebot_navigation)/param/move_base_params.yaml" command="load" />
-    <rosparam file="$(find turtlebot_navigation)/param/global_planner_params.yaml" command="load" />
     <rosparam file="$(find turtlebot_navigation)/param/navfn_global_planner_params.yaml" command="load" />
     <!-- external params file that could be loaded into the move_base namespace -->
     <rosparam file="$(arg custom_param_file)" command="load" />
@@ -31,8 +30,9 @@
     <param name="local_costmap/robot_base_frame" value="$(arg base_frame_id)"/>
     <param name="DWAPlannerROS/global_frame_id" value="$(arg odom_frame_id)"/>
     
-    
+    <param name="base_global_planner"  value="rrtstar_plan/rrtstar_planner"/>
     <param name="base_global_planner"  value="rrt_plan/rrt_planner"/>
+    <rosparam file="$(find turtlebot_navigation)/param/global_planner_params.yaml" command="load" />
 
 
     <remap from="cmd_vel" to="navigation_velocity_smoother/raw_cmd_vel"/>

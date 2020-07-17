@@ -16,10 +16,10 @@
 
 #include <pluginlib/class_list_macros.h>
 
-#include "rrt_planner.h"
+#include "rrtstar_planner.h"
 
 //register this planner as a BaseGlobalPlanner plugin
-PLUGINLIB_EXPORT_CLASS(rrt_plan::rrt_planner, nav_core::BaseGlobalPlanner)
+PLUGINLIB_EXPORT_CLASS(rrtstar_plan::rrtstar_planner, nav_core::BaseGlobalPlanner)
 
 static const float INFINIT_COST = INT_MAX; //!< cost of non connected nodes
 
@@ -54,24 +54,24 @@ timespec diff(timespec start, timespec end)
     return temp;
 }
 
-namespace rrt_plan
+namespace rrtstar_plan
 {
 //Default Constructor
-rrt_planner::rrt_planner():initialized_(false)
+rrtstar_planner::rrtstar_planner():initialized_(false)
 {
 
 }
-rrt_planner::rrt_planner(ros::NodeHandle &nh)
+rrtstar_planner::rrtstar_planner(ros::NodeHandle &nh)
 {
     ROSNodeHandle = nh;
 }
 
-rrt_planner::rrt_planner(std::string name, costmap_2d::Costmap2DROS* costmap_ros)
+rrtstar_planner::rrtstar_planner(std::string name, costmap_2d::Costmap2DROS* costmap_ros)
 {
     initialize(name, costmap_ros);
 }
 
-void rrt_planner::initialize(std::string name, costmap_2d::Costmap2DROS* costmap_ros)
+void rrtstar_planner::initialize(std::string name, costmap_2d::Costmap2DROS* costmap_ros)
 {
 
     if (!initialized_)
@@ -95,7 +95,7 @@ void rrt_planner::initialize(std::string name, costmap_2d::Costmap2DROS* costmap
 
         ROS_INFO("---resolution=%f---",resolution);
 
-        plan_pub_ = private_nh.advertise<nav_msgs::Path>("rrt_plan", 1);
+        plan_pub_ = private_nh.advertise<nav_msgs::Path>("rrtstar_plan", 1);
 
         OGM = new bool [mapSize];
         for (unsigned int iy = 0; iy < costmap_->getSizeInCellsY(); iy++)
@@ -142,7 +142,7 @@ void rrt_planner::initialize(std::string name, costmap_2d::Costmap2DROS* costmap
 
 
 
-/*void rrt_planner::getGridVal(vector<vector<float> >& gridVal, int startRowID, int startColID,int goalRowID,int goalColID)  //模拟温度场
+/*void rrtstar_planner::getGridVal(vector<vector<float> >& gridVal, int startRowID, int startColID,int goalRowID,int goalColID)  //模拟温度场
 {
     int subwidth=width/mapReduceSize,subheight=height/mapReduceSize;
     int i , j , m , n , s;
@@ -211,7 +211,7 @@ void rrt_planner::initialize(std::string name, costmap_2d::Costmap2DROS* costmap
 
 
 
-bool rrt_planner::makePlan(const geometry_msgs::PoseStamped& start, const geometry_msgs::PoseStamped& goal,
+bool rrtstar_planner::makePlan(const geometry_msgs::PoseStamped& start, const geometry_msgs::PoseStamped& goal,
                            std::vector<geometry_msgs::PoseStamped>& plan)
 {
     srand((unsigned)time(NULL));//设置随机数种子
@@ -381,7 +381,7 @@ bool rrt_planner::makePlan(const geometry_msgs::PoseStamped& start, const geomet
 }
 
 
-void  rrt_planner::publishPlan(const std::vector<geometry_msgs::PoseStamped>& path)
+void  rrtstar_planner::publishPlan(const std::vector<geometry_msgs::PoseStamped>& path)
 {
     if (!initialized_)
     {
@@ -411,8 +411,8 @@ void  rrt_planner::publishPlan(const std::vector<geometry_msgs::PoseStamped>& pa
 
 
 
-//vector<int>   rrt_planner::findCellPath(RRT &myRRT, int startCell, int goalCell,vector<vector<float> > gridVal)  //使用温度场作为启发因子
-vector<int>   rrt_planner::findCellPath(RRT &myRRT, int startCell, int goalCell) 
+//vector<int>   rrtstar_planner::findCellPath(RRT &myRRT, int startCell, int goalCell,vector<vector<float> > gridVal)  //使用温度场作为启发因子
+vector<int>   rrtstar_planner::findCellPath(RRT &myRRT, int startCell, int goalCell) 
 {
     vector<int>  rrtPath;
 
@@ -453,7 +453,7 @@ vector<int>   rrt_planner::findCellPath(RRT &myRRT, int startCell, int goalCell)
     return rrtPath;
 }
 
-void rrt_planner::convertToPlan(vector<int>rrtPath,std::vector<geometry_msgs::PoseStamped>& plan, geometry_msgs::PoseStamped  goal,int goalCell)
+void rrtstar_planner::convertToPlan(vector<int>rrtPath,std::vector<geometry_msgs::PoseStamped>& plan, geometry_msgs::PoseStamped  goal,int goalCell)
 {
     // convert the path
     for (int i = 0; i < rrtPath.size(); i++)
@@ -507,7 +507,7 @@ void rrt_planner::convertToPlan(vector<int>rrtPath,std::vector<geometry_msgs::Po
 
 }
 
-bool rrt_planner::checkIfOnObstacles(RRT::rrtNode &tempNode)
+bool rrtstar_planner::checkIfOnObstacles(RRT::rrtNode &tempNode)
 {
     if((tempNode.posX<width)&&(tempNode.posY<height))
     {
@@ -519,7 +519,7 @@ bool rrt_planner::checkIfOnObstacles(RRT::rrtNode &tempNode)
     else
         return false;
 }
-bool rrt_planner::pointcheck(RRT::rrtNode const &m,RRT::rrtNode const &n)
+bool rrtstar_planner::pointcheck(RRT::rrtNode const &m,RRT::rrtNode const &n)
 {
     RRT::rrtNode test;
     float p=0.00;
@@ -539,7 +539,7 @@ bool rrt_planner::pointcheck(RRT::rrtNode const &m,RRT::rrtNode const &n)
 }
 
 
-bool rrt_planner::isCellInsideMap(float x, float y)
+bool rrtstar_planner::isCellInsideMap(float x, float y)
 {
     bool valid = true;
 
@@ -549,7 +549,7 @@ bool rrt_planner::isCellInsideMap(float x, float y)
     return valid;
 }
 
-void rrt_planner::mapToWorld(double mx, double my, double& wx, double& wy)
+void rrtstar_planner::mapToWorld(double mx, double my, double& wx, double& wy)
 {
     costmap_2d::Costmap2D* costmap = costmap_ros_->getCostmap();
     wx = costmap->getOriginX() + mx * resolution;
@@ -557,7 +557,7 @@ void rrt_planner::mapToWorld(double mx, double my, double& wx, double& wy)
 }
 
 //verify if the cell(i,j) is free
-bool  rrt_planner::isFree(int i, int j)
+bool  rrtstar_planner::isFree(int i, int j)
 {
     int CellID = getCellIndex(i, j);
     return OGM[CellID];
@@ -565,12 +565,12 @@ bool  rrt_planner::isFree(int i, int j)
 }
 
 //verify if the cell(i,j) is free
-bool  rrt_planner::isFree(int CellID)
+bool  rrtstar_planner::isFree(int CellID)
 {
     return OGM[CellID];
 }
 
-bool rrt_planner::isStartAndGoalCellsValid(int startCell,int goalCell)
+bool rrtstar_planner::isStartAndGoalCellsValid(int startCell,int goalCell)
 {
     bool isvalid=true;
     bool isFreeStartCell=isFree(startCell);

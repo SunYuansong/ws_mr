@@ -1,3 +1,8 @@
+/*********************************************************************
+* Descritption: RRT node class, define the structure of RRT node and 
+*               the access function.
+*
+*********************************************************************/
 #ifndef rrt_h
 #define rrt_h
 
