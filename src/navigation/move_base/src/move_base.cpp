@@ -555,38 +555,53 @@ namespace move_base {
   }
 
   void MoveBase::planThread(){
+    //planThread()的核心是调用makePlan函数，该函数中实际进行全局规划。全局规划线程时刻等待被executeCB唤醒，
+    //当executeCB中唤醒planThread并将标志位runPlanner_设置为真，跳出内部的循环，继续进行下面部分。
     ROS_DEBUG_NAMED("move_base_plan_thread","Starting planner thread...");
     ros::NodeHandle n;
     ros::Timer timer;
+    //标志位置为假，表示线程已唤醒
     bool wait_for_wake = false;
     boost::unique_lock<boost::recursive_mutex> lock(planner_mutex_);
     while(n.ok()){
       //check if we should run the planner (the mutex is locked)
+      //不断循环，直到wait_for_wake（上面行已置为假）和runPlanner_为真，跳出循环
       while(wait_for_wake || !runPlanner_){
         //if we should not be running the planner then suspend this thread
+        //如果waitforwake是真或者runplanner是假，不断执行循环，wait()等待
         ROS_DEBUG_NAMED("move_base_plan_thread","Planner thread is suspending");
+        //调用wait函数时，函数会自动调用lock.unlock()释放锁，使得其他被阻塞在锁竞争上的线程得以继续执行
+        //比如executeCB中先把标志位runPlanner设为true，然后用notify，使这里的锁由unlock变成lock，竞争到了资源，并且这里的规划线程开始执行
         planner_cond_.wait(lock);
         wait_for_wake = false;
       }
+      //start_time设为当前时间
       ros::Time start_time = ros::Time::now();
 
       //time to plan! get a copy of the goal and unlock the mutex
+      //把全局中被更新的全局目标planner_goal存储为临时目标
       geometry_msgs::PoseStamped temp_goal = planner_goal_;
       lock.unlock();
       ROS_DEBUG_NAMED("move_base_plan_thread","Planning...");
 
       //run planner
+      //全局规划初始化，清空
       planner_plan_->clear();
+      //调用MoveBase类的makePlan函数，如果成功为临时目标制定全局规划planner_plan_，则返回true
       bool gotPlan = n.ok() && makePlan(temp_goal, *planner_plan_);
 
+      //若成功为临时目标制定全局规划
       if(gotPlan){
+        //输出成功制定全局规划，并打印规划路线上的点数
         ROS_DEBUG_NAMED("move_base_plan_thread","Got Plan with %zu points!", planner_plan_->size());
         //pointer swap the plans under mutex (the controller will pull from latest_plan_)
+        //用指针交换planner_plan_和latest_plan_的值
         std::vector<geometry_msgs::PoseStamped>* temp_plan = planner_plan_;
 
         lock.lock();
         planner_plan_ = latest_plan_;
         latest_plan_ = temp_plan;
+        //最近一次有效全局规划的时间设为当前时间
         last_valid_plan_ = ros::Time::now();
         planning_retries_ = 0;
         new_global_plan_ = true;
@@ -594,28 +609,40 @@ namespace move_base {
         ROS_DEBUG_NAMED("move_base_plan_thread","Generated a plan from the base_global_planner");
 
         //make sure we only start the controller if we still haven't reached the goal
+        //确保只有在我们还没到达目标时才启动controller以局部规划
+        //如果runPlanner_在调用此函数时被置为真，将MoveBase状态设置为CONTROLLING（局部规划中）
         if(runPlanner_)
           state_ = CONTROLLING;
+        //如果规划频率小于0，runPlanner_置为假
         if(planner_frequency_ <= 0)
           runPlanner_ = false;
         lock.unlock();
       }
       //if we didn't get a plan and we are in the planning state (the robot isn't moving)
+      //如果全局规划失败并且MoveBase还在planning状态，即机器人没有移动，则进入自转模式
       else if(state_==PLANNING){
         ROS_DEBUG_NAMED("move_base_plan_thread","No Plan...");
+        //最迟制定出本次全局规划的时间=上次成功规划的时间+容忍时间
         ros::Time attempt_end = last_valid_plan_ + ros::Duration(planner_patience_);
 
         //check if we've tried to make a plan for over our time limit or our maximum number of retries
         //issue #496: we stop planning when one of the conditions is true, but if max_planning_retries_
         //is negative (the default), it is just ignored and we have the same behavior as ever
+        //检查时间和次数是否超过限制，若其中一项不满足限制，停止全局规划
         lock.lock();
+        //对同一目标的全局规划的次数记录+1
         planning_retries_++;
+        //如果runplanner被置为真，且目前超时或超次数，进入恢复行为模式
         if(runPlanner_ &&
            (ros::Time::now() > attempt_end || planning_retries_ > uint32_t(max_planning_retries_))){
           //we'll move into our obstacle clearing mode
+          //将MoveBase状态设置为恢复行为
           state_ = CLEARING;
+          //全局规划标志位置为假
           runPlanner_ = false;  // proper solution for issue #523
+          //发布0速度
           publishZeroVelocity();
+          //恢复行为触发器状态设置为全局规划失败
           recovery_trigger_ = PLANNING_R;
         }
 
@@ -638,24 +665,34 @@ namespace move_base {
 
   void MoveBase::executeCb(const move_base_msgs::MoveBaseGoalConstPtr& move_base_goal)
   {
+    //检测收到的目标位置的旋转四元数是否有效，若无效，直接返回
     if(!isQuaternionValid(move_base_goal->target_pose.pose.orientation)){
       as_->setAborted(move_base_msgs::MoveBaseResult(), "Aborting on goal because it was sent with an invalid quaternion");
       return;
     }
 
+    //将目标位置转换到global坐标系下（geometry_msgs形式）
     geometry_msgs::PoseStamped goal = goalToGlobalFrame(move_base_goal->target_pose);
 
     //we have a goal so start the planner
+    //启动全局规划
     boost::unique_lock<boost::recursive_mutex> lock(planner_mutex_);
+    //用接收到的目标goal来更新全局变量，即全局规划目标，这个值在planThread中会被用来做全局规划的当前目标
     planner_goal_ = goal;
+    //全局规划标志位设为真
     runPlanner_ = true;
+    //开始全局规划并于此处阻塞
     planner_cond_.notify_one();
     lock.unlock();
 
+    //全局规划完成后，发布目标到current_goal话题上
     current_goal_pub_.publish(goal);
+    //创建一个全局规划容器
     std::vector<geometry_msgs::PoseStamped> global_plan;
 
+    //局部规划频率
     ros::Rate r(controller_frequency_);
+    //如果代价地图是被关闭的，这里重启
     if(shutdown_costmaps_){
       ROS_DEBUG_NAMED("move_base","Starting up costmaps that were shut down previously");
       planner_costmap_ros_->start();
@@ -663,14 +700,20 @@ namespace move_base {
     }
 
     //we want to make sure that we reset the last time we had a valid plan and control
+    //上一次有效的局部规划时间设为现在
     last_valid_control_ = ros::Time::now();
+    //上一次有效的全局规划时间设为现在
     last_valid_plan_ = ros::Time::now();
+    //上一次震荡重置时间设为现在
     last_oscillation_reset_ = ros::Time::now();
+    //对同一目标的全局规划次数记录归为0
     planning_retries_ = 0;
 
     ros::NodeHandle n;
     while(n.ok())
     {
+      //c_freq_change_被初始化为false
+      //如果c_freq_change_即局部规划频率需要中途更改为真，用更改后的controller_frequency_来更新r值
       if(c_freq_change_)
       {
         ROS_INFO("Setting controller frequency to %.2f", controller_frequency_);
@@ -678,23 +721,30 @@ namespace move_base {
         c_freq_change_ = false;
       }
 
+      //如果action的服务器被抢占
       if(as_->isPreemptRequested()){
         if(as_->isNewGoalAvailable()){
           //if we're active and a new goal is available, we'll accept it, but we won't shut anything down
+          //如果获得了新目标，接收并存储新目标，并将上述过程重新进行一遍
           move_base_msgs::MoveBaseGoal new_goal = *as_->acceptNewGoal();
 
+          //检测四元数是否有效
           if(!isQuaternionValid(new_goal.target_pose.pose.orientation)){
             as_->setAborted(move_base_msgs::MoveBaseResult(), "Aborting on goal because it was sent with an invalid quaternion");
             return;
           }
 
+          //将新目标坐标转换到全局坐标系（默认/map）下
           goal = goalToGlobalFrame(new_goal.target_pose);
 
           //we'll make sure that we reset our state for the next execution cycle
+          //重设恢复行为索引位为0
           recovery_index_ = 0;
+          //重设MoveBase状态为全局规划中
           state_ = PLANNING;
 
           //we have a new goal so make sure the planner is awake
+          //重新调用planThread进行全局规划
           lock.lock();
           planner_goal_ = goal;
           runPlanner_ = true;
@@ -702,6 +752,7 @@ namespace move_base {
           lock.unlock();
 
           //publish the goal point to the visualizer
+          //全局规划成功后，发布新目标到current_goal话题上
           ROS_DEBUG_NAMED("move_base","move_base has received a goal of x: %.2f, y: %.2f", goal.pose.position.x, goal.pose.position.y);
           current_goal_pub_.publish(goal);
 
@@ -713,22 +764,29 @@ namespace move_base {
         }
         else {
           //if we've been preempted explicitly we need to shut things down
+          //否则，服务器的抢占是由于收到了取消行动的命令
+          //重置服务器状态
           resetState();
 
           //notify the ActionServer that we've successfully preempted
+          //action服务器清除相关内容，并调用setPreempted()函数
           ROS_DEBUG_NAMED("move_base","Move base preempting the current goal");
           as_->setPreempted();
 
           //we'll actually return from execute after preempting
+          //取消命令后，返回
           return;
         }
       }
 
       //we also want to check if we've changed global frames because we need to transform our goal pose
+      //服务器接收到目标后，没有被新目标或取消命令抢占
+      //检查目标是否被转换到全局坐标系（/map）下
       if(goal.header.frame_id != planner_costmap_ros_->getGlobalFrameID()){
         goal = goalToGlobalFrame(goal);
 
         //we want to go back to the planning state for the next execution cycle
+        //恢复行为索引重置为0，MoveBase状态置为全局规划中
         recovery_index_ = 0;
         state_ = PLANNING;
 
@@ -751,9 +809,11 @@ namespace move_base {
       }
 
       //for timing that gives real time even in simulation
+      //记录开始局部规划的时刻为当前时间
       ros::WallTime start = ros::WallTime::now();
 
       //the real work on pursuing a goal is done here
+      //调用executeCycle函数进行局部规划，传入目标和全局规划路线
       bool done = executeCycle(goal, global_plan);
 
       //if we're done, then we'll return from execute
@@ -761,23 +821,29 @@ namespace move_base {
         return;
 
       //check if execution of the goal has completed in some way
-
+      //记录从局部规划开始到这时的时间差
       ros::WallDuration t_diff = ros::WallTime::now() - start;
+      //打印用了多长时间完成操作
       ROS_DEBUG_NAMED("move_base","Full control cycle time: %.9f\n", t_diff.toSec());
 
+      //用局部规划频率进行休眠
       r.sleep();
       //make sure to sleep for the remainder of our cycle time
+      //cycleTime用来获取从r实例初始化到r实例被调用sleep函数的时间间隔
+      //时间间隔超过了1/局部规划频率，且还在局部规划，打印“未达到实际要求，实际上时间是r.cycleTime().toSec()”
       if(r.cycleTime() > ros::Duration(1 / controller_frequency_) && state_ == CONTROLLING)
         ROS_WARN("Control loop missed its desired rate of %.4fHz... the loop actually took %.4f seconds", controller_frequency_, r.cycleTime().toSec());
     }
 
     //wake up the planner thread so that it can exit cleanly
+    //唤醒全局规划线程，以使它能够“干净地退出”
     lock.lock();
     runPlanner_ = true;
     planner_cond_.notify_one();
     lock.unlock();
 
     //if the node is killed then we'll abort and return
+    //如果节点被关闭了，那么Action服务器也关闭并返回
     as_->setAborted(move_base_msgs::MoveBaseResult(), "Aborting on the goal because the node has been killed");
     return;
   }
