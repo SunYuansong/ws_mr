@@ -79,8 +79,8 @@ namespace mpepc_local_planner {
 			// Set parameters
 			private_nh.param<double>("cost_theta", C1, 0.05);
 			private_nh.param<double>("cost_collision", C2, 1.0);
-			private_nh.param<double>("cost_v", C3, 0.05);
-			private_nh.param<double>("cost_w", C4, 0.05);
+			private_nh.param<double>("cost_v", C3, 0.4);
+			private_nh.param<double>("cost_w", C4, 0.2);
 			private_nh.param<double>("cost_collision_sigma", SIGMA, 0.2);
 			private_nh.param<double>("goal_dist_tol", GOAL_DIST_UPDATE_THRESH,  0.15);
 			private_nh.param<double>("goal_angle_tol", GOAL_ANGLE_UPDATE_THRESH, 0.1);
